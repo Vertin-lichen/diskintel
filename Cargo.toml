@@ -1,0 +1,19 @@
+[package]
+name = "diskintel-rs"
+version = "0.3.3"
+edition = "2024"
+description = "磁盘情报系统 · 原生窗口"
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts"] }
+egui_extras = "0.37.0"
+rusqlite = { version = "0.42.0", features = ["bundled"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

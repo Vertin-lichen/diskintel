@@ -1,0 +1,46 @@
+name: Bug 报告
+description: 程序行为异常、崩溃或数据不一致
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量附上截图与复现步骤；日志可用 `DiskIntel.exe --probe` 与 `--json status` 的输出。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: 0.3.2
+    validations:
+      required: true
+  - type: dropdown
+    id: view
+    attributes:
+      label: 出现的视图
+      options:
+        - 检索
+        - 空间
+        - 对比
+        - 快照管理
+        - 安装 / 卸载
+        - 其它
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      placeholder: Windows 版本 / 磁盘类型 / 快照大小 / 是否启用实时引擎

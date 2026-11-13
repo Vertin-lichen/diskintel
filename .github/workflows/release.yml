@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --release
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          Copy-Item target/release/diskintel-rs.exe target/release/DiskIntel.exe
+          pwsh -File tools/package.ps1 -Version $version
+
+      # 可选签名：在仓库 Secrets 里配置 SIGN_CERT_PFX_BASE64 与 SIGN_CERT_PASSWORD 即生效
+      - name: Sign (optional)
+        if: ${{ secrets.SIGN_CERT_PFX_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String('${{ secrets.SIGN_CERT_PFX_BASE64 }}'))
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          pwsh -File tools/build-installer.ps1 -Version $version -PfxPath $pfx -PfxPassword '${{ secrets.SIGN_CERT_PASSWORD }}'
+
+      - name: Build installer (unsigned fallback)
+        if: ${{ secrets.SIGN_CERT_PFX_BASE64 == '' }}
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          pwsh -File tools/build-installer.ps1 -Version $version
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $files = @(
+            "dist/DiskIntel-$version-Setup.exe",
+            "dist/DiskIntel-$version-win64.zip"
+          )
+          $lines = foreach ($f in $files) {
+            if (Test-Path $f) {
+              $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+              "$h  $(Split-Path $f -Leaf)"
+            }
+          }
+          $lines | Out-File -Encoding utf8NoBOM "dist/SHA256SUMS.txt"
+          Get-Content "dist/SHA256SUMS.txt"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist/*.exe
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.exe
+            dist/*.zip
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $assets = @(Get-ChildItem dist -File -Include '*.exe', '*.zip', '*.txt' | ForEach-Object { $_.FullName })
+          $notes = "docs/RELEASE_NOTES-$($tag.TrimStart('v')).md"
+          if (Test-Path $notes) {
+            gh release create $tag $assets --title "DiskIntel $tag" --notes-file $notes
+          } else {
+            gh release create $tag $assets --title "DiskIntel $tag" --generate-notes
+          }

@@ -1,0 +1,11 @@
+/target
+/dist
+待删除/
+*.pdb
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
+Thumbs.db
+tools/installer/icon.ico
