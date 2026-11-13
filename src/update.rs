@@ -28,15 +28,18 @@ pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// body 摘要最多取多少字符（完整 release notes 通常很长，窗口里放不下）。
 const BODY_EXCERPT_CHARS: usize = 200;
-/// 网络超时统一 5 秒（解析 / 连接 / 发送 / 接收）。
-const TIMEOUT_MS: i32 = 5000;
+/// 网络超时统一 10 秒（解析 / 连接 / 发送 / 接收）；首次访问 GitHub 偶发较慢。
+const TIMEOUT_MS: i32 = 10_000;
 /// 响应体上限：release JSON 正常几十 KB，超过 1 MB 视为异常。
 const MAX_RESPONSE_BYTES: usize = 1_048_576;
 /// HTTPS 默认端口。
 const HTTPS_PORT: u16 = 443;
 
-/// WinHTTP 访问类型：自动读取系统代理（Win8.1+）。
-const WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY: u32 = 4;
+/// WinHTTP 访问类型：沿用系统代理配置（未启用代理时直连）。
+///
+/// 不用 AUTOMATIC_PROXY(4)：它会先做 WPAD/PAC 自动发现，在没配代理的机器上
+/// 可能额外等待数秒甚至超时（实测 5 秒收不到响应），而这里的请求只需要直连。
+const WINHTTP_ACCESS_TYPE_DEFAULT_PROXY: u32 = 0;
 /// WinHTTP 请求标志：https。
 const WINHTTP_FLAG_SECURE: u32 = 0x0080_0000;
 /// 查询 HTTP 状态码。
@@ -399,7 +402,7 @@ fn https_get(url: &str, user_agent: &str) -> Result<String, String> {
     unsafe {
         let session = Handle(WinHttpOpen(
             agent_w.as_ptr(),
-            WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
             ptr::null(),
             ptr::null(),
             0,
@@ -408,7 +411,7 @@ fn https_get(url: &str, user_agent: &str) -> Result<String, String> {
             return Err("WinHttpOpen 失败：无法初始化网络会话".to_owned());
         }
         if WinHttpSetTimeouts(session.0, TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS) == 0 {
-            return Err("WinHttpSetTimeouts 失败：无法设置 5 秒超时".to_owned());
+            return Err("WinHttpSetTimeouts 失败：无法设置 10 秒超时".to_owned());
         }
         let connect = Handle(WinHttpConnect(session.0, host_w.as_ptr(), HTTPS_PORT, 0));
         if connect.0.is_null() {
